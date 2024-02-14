@@ -1,0 +1,263 @@
+---
+title: "Binary Response"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Question 2 on page 47
+
+```{r}
+library(faraway)
+
+data(pima)
+```
+
+
+```{r}
+head(pima)
+```
+
+```{r}
+#Creating a factor version of the test results
+pima$factor_test = factor(pima$test)
+
+head(pima)
+```
+
+
+```{r}
+#Creating an interleaved histogram with insulin as X
+library(ggplot2)
+
+ggplot(pima, aes(x=insulin, color=factor_test)) + geom_histogram(position="dodge")
+
+```
+
+
+A) Foremost, I notice that there is a very high count of 0 insulin numbers. This does not seem possible and seems very odd. 
+
+
+```{r}
+#Replacing 0 values in insulin column with NA
+pima["insulin"][pima["insulin"] == 0] <- NA
+head(pima)
+```
+
+```{r}
+#New interleaved plot
+ggplot(pima, aes(x=insulin, color=factor_test)) + geom_histogram(position="dodge")
+```
+
+B) The distributions looks much more like we would expect now. We can see that there is one peak for the data. The testing positive for diabetes is shown to peak around 180, while testing negative for diabetes seems to peak closer to 50. 
+
+
+```{r}
+#Replacing the incredible zeros
+pima_removed = pima
+
+pima_removed["triceps"][pima_removed["triceps"] == 0] <- NA
+pima_removed["bmi"][pima_removed["bmi"] == 0] <- NA
+pima_removed["age"][pima_removed["age"] == 0] <- NA
+pima_removed["glucose"][pima_removed["glucose"] == 0] <- NA
+pima_removed["diabetes"][pima_removed["diabetes"] == 0] <- NA
+pima_removed["diastolic"][pima_removed["diastolic"] == 0] <- NA
+
+
+#Removing unfactored test variable so that we can proceed with modeling
+pima_removed <- pima[,-9]
+
+pima_removed = na.omit(pima_removed)
+```
+
+
+```{r}
+#Fitting model with diabetes test as response and all other variables as predictors
+diabetes_model = glm(factor_test~., family = binomial, data=pima_removed)
+
+summary(diabetes_model)
+```
+
+C) Because of issues with anova further in the code, I had to remove all of the NA variables in order to match the amount of variables in part C and D. This new dataframe only holds 394 observations and all were used in the model. There are much less observations because R will not use any observations that have N/A values in the model creation. 
+
+
+```{r}
+#Creating a model with insulin and triceps as predictors
+diabetes_model_IT = glm(factor_test~insulin+triceps, family = binomial, data=pima_removed)
+
+summary(diabetes_model_IT)
+```
+
+D) 394 observations were used in the insulin+triceps model because the same dataframe was used as in part C. We will use anova to test which model is a better fit.
+
+```{r}
+anova(diabetes_model_IT, diabetes_model, test='Chi')
+```
+
+D) We can see that model 2 (with all variables) fits the data much better. There is a very small and significant p-value for the chi-square test. I was able to perform anova because I matched the amount of observations used in each model. 
+
+```{r}
+#Using AIC to select the model
+step_model = step(diabetes_model)
+step_model
+```
+
+```{r}
+summary(step_model)
+```
+
+E) Using AIC to select the model, we can see that the model chosen through the step function includes the predictors pregnant, glucose, bmi, diabetes, and age. The AIC for this model is 356.99, being the lowest in the step models. It also is lower than both of the previous models we have made, making it the best fit. There are still 394 cases used as we used the dataframe with NA values removed.
+
+```{r}
+#Creating a variable that indicates whether the case contains a missing value.
+pima$if_na <- rowSums(is.na(pima)) > 0
+pima$if_na [pima$if_na == "true"] <- 1
+pima$if_na [pima$if_na == "false"] <- 0
+head(pima)
+```
+
+```{r}
+#Using missing variable to predict test result
+missingness_model = glm(factor_test~if_na, data=pima, family = binomial)
+
+summary(missingness_model)
+```
+
+f) Missingness is not associated with the test result as the coefficient for the predictor is not significant with a p-value of 0.257. Knowing that missingness is not associated with the test result would allow us to remove all of the NA observations and refit the data. However, we have already removed all of the NA observations in order to complete the anova calculation. I will be skipping this step as it is a repeat of a previous question.
+
+```{r}
+q1 = quantile(pima$bmi, 0.25)
+q3 = quantile(pima$bmi, 0.75)
+
+ratio = q3/q1
+q1
+q3
+ratio
+
+#beta = coef(step_model)
+#expbeta = exp(beta)
+#expbeta
+confint(step_model)
+final_first = ratio*exp(0.004005)
+final_second = ratio*exp(0.1203)
+
+final_first
+final_second
+```
+
+G) The 95% confidence interval for the odds of positive test increase by (34.6%, 51.2%) with each additional bmi point.
+
+
+```{r}
+#Creating a model to test if women who test positive have higher diastolic blood pressures
+BP_mod = glm(factor_test~diastolic, family=binomial, data=pima)
+summary(BP_mod)
+```
+
+
+H) Women who test positive do have higher blood pressure. The model shown above indicates a positive coefficient along with the diastolic predictor. The coefficient means that each increase in diastolic blood pressure (mm Hg) will increase the change of a positive test. However, diastolic blood pressure is not significant in this model at the 95% level with a p-value of 0.072. The first question asks what the coefficient value (B) is connected to the predictor, but the second questions refers to the significance of that coefficient - If this value can statistically be considered different from zero. They are contradictory as the coefficient shows that it is not statistically different from zero, but we can say it has a positive value as the coefficient, meaning women with positive tests tend to have higher blood pressure. 
+
+
+
+Question 4 on Pages 48/49
+
+
+```{r}
+data(nodal, package="boot")
+help(nodal, package="boot")
+
+head(nodal)
+```
+```{r}
+#Improving matrix plot and labeling axis
+nodal$m = NULL
+
+new_matrix = as.matrix(nodal)
+order = new_matrix[order(new_matrix[,1], decreasing=FALSE),]
+order
+
+image(order, xlab="Columns", ylab="Rows (Cases)")
+```
+
+```{r}
+#Fitting modal with nodal as response and other five as predictors
+nodal_model = glm(r ~ ., family=binomial, data=nodal)
+
+summary(nodal_model)
+```
+
+B) Yes, xray and acid are both significant at the 5% level. This shows that there is at least evidence for those two predictors to be related to the response.
+
+
+```{r}
+#Fitting a smaller model that removes aged and grade
+small_nodal_model = glm(r~xray+acid+stage, family=binomial, data=nodal)
+
+summary(small_nodal_model)
+```
+
+C) Yes, this small model is better. The AIC is 57.18 for the smaller model, compared to the 59.6 in the larger model. A smaller AIC always shows a better fit.
+
+```{r}
+#Finding a 95% confidence interval for the odds of nodal involvement with serious x-ray compared to without
+
+confint(small_nodal_model)
+lower_bound = exp(0.4562)
+upper_bound = exp(3.5692)
+lower_bound
+upper_bound
+```
+
+C) A 95% confidence interval for the increase in odds is 57.8% to 3548.8%.
+
+
+```{r}
+#Fitting a larger model with five predictors and all two-way interactions
+large_model = glm(r~xray+acid+stage+aged+grade+xray*acid+xray*stage+xray*aged+xray*grade+acid*stage+acid*aged+acid*grade+stage*aged+stage*grade+aged*grade, family=binomial, data=nodal)
+summary(large_model)
+sumary(large_model)
+```
+
+E) The standard errors to the coefficients are so large because the groups are linearly seperable so that a very strong fit is possible. It results in unstable estimates of the parameters and standard errors. It suggests that perfect predictions can be made even though this is most likely not true. We will need to use a bias reduction method to get a better model.
+
+```{r}
+#Creating a biased reduced model
+library(brglm)
+bias_reduced_mod = brglm(r~xray+acid+stage+aged+grade+xray*acid+xray*stage+xray*aged+xray*grade+acid*stage+acid*aged+acid*grade+stage*aged+stage*grade+aged*grade, family=binomial, data=nodal)
+summary(bias_reduced_mod)
+```
+
+F) The largest interaction is stage:grade. This is a negative interaction with -2.8219 as the coefficient. The largest positive interaction is xray:aged with the coefficient of 1.4587.
+
+```{r}
+#Classifying cases in dataset with bias reduced model
+nodal$predprob_BR = predict(bias_reduced_mod, type="response")
+
+nodal$new_outcome[nodal$predprob_BR > 0.5] = 1
+nodal$new_outcome[nodal$predprob_BR < 0.5] = 0
+
+#Calculating wrong classifications for bias reduced model
+nodal$wrong_classifications_BR = nodal$r - nodal$new_outcome
+sum(nodal$wrong_classifications_BR == '1' | nodal$wrong_classifications_BR == '-1')
+```
+
+G) Out of 53 observations, 8 were incorrectly calculated with the bias reduction model.
+
+
+```{r}
+#Classifying cases in dataset with model from part B
+nodal$predprob_NM = predict(nodal_model, type="response")
+
+nodal$new_outcome_NM[nodal$predprob_NM > 0.5] = 1
+nodal$new_outcome_NM[nodal$predprob_NM < 0.5] = 0
+
+#Calculating wrong classifications for original model
+nodal$wrong_classifications_NM = nodal$r - nodal$new_outcome_NM
+sum(nodal$wrong_classifications_NM == '1' | nodal$wrong_classifications_NM == '-1')
+```
+
+G) Out of 53 observations, 10 were incorrectly calculated with the nodal model from part B. This is two greater than the bias reduction model. As there are only 53 observations it is hard to say this is how the models will perform on a long term scale. We would need more observations to fully understand how these models would perform. However, I think that these numbers are reasonable for how the models will perform in the future. I believe they will not be fully successful in determining lymph node cancer, but can help contribute towards knowledge on lymph node cancer without surgery. 
